@@ -1,0 +1,197 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+#pragma kernel Trails 
+#pragma kernel ProcessTrails
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture2D<float4> Result;
+
+struct Point
+{
+    float2 pos;
+    float angle_in_radians;
+};
+    
+RWStructuredBuffer<Point> buffer;
+
+uint number_of_points;
+uint magnitude;
+uint width;
+uint height;
+float deltatime;
+
+int sensor_length;
+
+
+float trail_diffuse_amount;
+float trail_blur_amount;
+
+float attraction_value;
+
+float sensor_angle_offset;
+int sensor_distance;
+int sensor_size;
+    
+float sense(uint3 id, float angle_offset);
+
+
+
+[numthreads(64,1,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    if (id.x > number_of_points)
+    {
+        return;
+    }
+    
+    if (0 < buffer[id.x].pos.x < width && 0 < buffer[id.x].pos.y < height)
+    {
+        float x_movement_cords = (magnitude * cos(buffer[id.x].angle_in_radians));
+        float y_movement_cords = (magnitude * sin(buffer[id.x].angle_in_radians));
+        
+        buffer[id.x].pos.x += x_movement_cords;
+        buffer[id.x].pos.y += y_movement_cords;
+        
+        Result[buffer[id.x].pos] = float4(1, 1, 1, 1);   
+    }
+    
+    if (buffer[id.x].pos.x >= width || buffer[id.x].pos.x <= 0)
+    {
+        buffer[id.x].angle_in_radians = 3.141592653596969 - buffer[id.x].angle_in_radians;
+        float x_movement_cords = (magnitude * cos(buffer[id.x].angle_in_radians));
+        float y_movement_cords = (magnitude * sin(buffer[id.x].angle_in_radians));
+        
+        buffer[id.x].pos.x += x_movement_cords;
+        buffer[id.x].pos.y += y_movement_cords;
+        
+        Result[buffer[id.x].pos] = float4(1, 1, 1, 1);
+    }
+    else if (buffer[id.x].pos.y >= height || buffer[id.x].pos.y <= 0)
+    {
+        buffer[id.x].angle_in_radians = 2 * 3.141592653596969 - buffer[id.x].angle_in_radians;
+        float x_movement_cords = (magnitude * cos(buffer[id.x].angle_in_radians));
+        float y_movement_cords = (magnitude * sin(buffer[id.x].angle_in_radians));
+        
+        buffer[id.x].pos.x += x_movement_cords;
+        buffer[id.x].pos.y += y_movement_cords;
+        
+        Result[buffer[id.x].pos] = float4(1, 1, 1, 1);
+    }
+    
+    
+    float forward_concentration = sense(id, 0);
+    float right_concentration = sense(id, sensor_angle_offset);
+    float left_concentration = sense(id, -(sensor_angle_offset));
+    
+    
+    float concentration_difference = abs(right_concentration - left_concentration);
+    
+    if (forward_concentration > right_concentration && forward_concentration > left_concentration)
+    {
+        buffer[id.x].angle_in_radians += 0;
+    }
+    else if (right_concentration > left_concentration)
+    {
+        buffer[id.x].angle_in_radians += ((attraction_value * concentration_difference) * 3.14159);
+    }
+    else if (left_concentration > right_concentration)
+    {
+        buffer[id.x].angle_in_radians -= ((attraction_value * concentration_difference) * 3.14159);
+    }
+    
+
+}
+
+[numthreads(8,8,1)]
+void Trails(uint3 id : SV_DispatchThreadID)
+{
+    Result[id.xy] = max(0, Result[id.xy] - trail_diffuse_amount);
+    
+    if (1 >= id.x <= width || 1 >= id.y <= height)
+    {
+        return;
+    }
+
+    float4 original_value = Result[id.xy];
+    float4 average = float4(0, 0, 0,0);
+    int neighbour_count = 0;
+    
+    for (int x = -1; x <= 1; x++)
+    {
+        for (int y = -1; y <= 1; y++)
+        {
+            average.r += Result[float2(id.x + x, id.y + y)].r;
+            average.g += Result[float2(id.x + x, id.y + y)].g;
+            average.b += Result[float2(id.x + x, id.y + y)].b;
+            average.a += Result[float2(id.x + x, id.y + y)].a;
+            neighbour_count++;
+        }
+    }
+    average /= neighbour_count;
+    
+    float4 blur_results = lerp(original_value, float4(average.r, average.g, average.b, 1), trail_blur_amount);
+    
+    Result[id.xy] = blur_results;
+    
+}
+
+[numthreads(8, 8, 1)]
+void ProcessTrails(uint3 id : SV_DispatchThreadID)
+{
+    Result[id.xy] = max(0, Result[id.xy] - trail_diffuse_amount);
+    
+    // get rid of the edges
+    if (id.x <= 1 || id.x >= width || id.y <= 1 || id.y >= height)
+    {
+        Result[id.xy] -= deltatime * 2;
+        return;
+    }
+    
+    float4 originalValue = Result[id.xy];
+    float4 average = (0, 0, 0, 0);
+    int neighbourCount;
+    
+    for (int x = -1; x <= 1; x++)
+    {
+        for (int y = -1; y <= 1; y++)
+        {
+            average.r += Result[float2(id.x + x, id.y + y)].r;
+            average.g += Result[float2(id.x + x, id.y + y)].g;
+            average.b += Result[float2(id.x + x, id.y + y)].b;
+            average.a += Result[float2(id.x + x, id.y + y)].a;
+
+            //average = (0, 1, 0, 1);
+            neighbourCount++;
+        }
+    }
+    
+    average = average / 9;
+    
+    float4 blurResults = max(0, average - trail_blur_amount);
+    
+    Result[id.xy] = blurResults;
+}
+
+float sense(uint3 id, float angle_offset)
+{
+    float sensor_angle = buffer[id.x].angle_in_radians + angle_offset;
+    
+    float sensor_centre_x_coord = (cos(buffer[id.x].angle_in_radians + angle_offset) * sensor_distance + buffer[id.x].pos.x);
+    float sensor_centre_y_coord = (sin(buffer[id.x].angle_in_radians + angle_offset) * sensor_distance + buffer[id.x].pos.y);
+    float sum = 0;
+    
+    for (int x = -sensor_size; x <= sensor_size; x++)
+    {
+        for (int y = -sensor_size; y <= sensor_size; y++)
+        {
+            int2 position = int2(sensor_centre_x_coord + x,sensor_centre_y_coord + y);
+            
+            if (position.x > 0 && position.x < width && position.y > 0 && position.y < height)
+            {
+                sum += Result[position];
+               // Result[position] = float4(0, 1, 0, 0);
+            }
+        }
+    }
+    return sum;
+}
