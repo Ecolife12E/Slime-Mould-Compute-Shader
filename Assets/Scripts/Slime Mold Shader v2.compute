@@ -20,8 +20,6 @@ uint width;
 uint height;
 float deltatime;
 
-int sensor_length;
-
 
 float trail_diffuse_amount;
 float trail_blur_amount;

@@ -7,11 +7,7 @@ public class GameData : ScriptableObject
 {
     [Header("Points Settings")]
     public int num_of_points;
-
     public int speed_of_points;
-
-    public int sensor_offset;
-
 
     [Header("Texture Settings")]
     public int texture_width;
@@ -21,7 +17,6 @@ public class GameData : ScriptableObject
     public float trail_diffuse_amount;
     public float trail_blur_amount;
     public float attraction_value;
-
 
     [Header("Sensor Settings")]
     public int sensor_distance;

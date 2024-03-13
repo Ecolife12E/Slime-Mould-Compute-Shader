@@ -77,7 +77,6 @@ public class SlimeMoldv2 : MonoBehaviour
         shader.SetInt("magnitude", gamedata.speed_of_points);
         shader.SetInt("width", gamedata.texture_width);
         shader.SetInt("height", gamedata.texture_height);
-        shader.SetInt("sensor_length", gamedata.sensor_offset);
         shader.SetFloat("trail_diffuse_amount", gamedata.trail_diffuse_amount);
         shader.SetFloat("trail_blur_amount", gamedata.trail_blur_amount);
         shader.SetFloat("attraction_value", gamedata.attraction_value);
